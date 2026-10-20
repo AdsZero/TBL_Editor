@@ -48,5 +48,8 @@
   "translation": "Translation",
   "translation_placeholder": "Enter translation...",
   "save_translation": "Save Translation",
-  "translated": "Translated"
+  "translated": "Translated",
+  "favorites": "Favorites",
+  "add_to_favorites": "Add to favorites",
+  "no_favorites": "No favorite entries"
 }

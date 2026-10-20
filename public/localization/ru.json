@@ -48,5 +48,8 @@
   "translation": "Перевод",
   "translation_placeholder": "Введите перевод...",
   "save_translation": "Сохранить перевод",
-  "translated": "Переведено"
+  "translated": "Переведено",
+  "favorites": "Избранное",
+  "add_to_favorites": "Добавить в избранное",
+  "no_favorites": "Нет избранных записей"
 }
