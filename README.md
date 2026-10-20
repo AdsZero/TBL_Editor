@@ -148,6 +148,9 @@ tbl-editor/
 │   │   └── useLocalization.ts
 │   ├── lib/               # Утилиты и библиотеки
 │   │   └── tblFile.ts     # Работа с TBL файлами
+│   ├── modules/           # Модули импорта/экспорта
+│   │   ├── import.ts      # Функции импорта из форматов
+│   │   └── export.ts      # Функции экспорта в форматы
 │   ├── App.tsx            # Главный компонент
 │   ├── main.tsx           # Точка входа
 │   └── index.css          # Глобальные стили
@@ -155,7 +158,11 @@ tbl-editor/
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
-└── README.md
+├── README.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── LICENSE
+└── .gitignore
 ```
 
 ## 🔧 TBL Формат

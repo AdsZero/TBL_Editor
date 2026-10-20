@@ -11,6 +11,8 @@ import { TBLFile, TBLEntry, encodeCP1251 } from './lib/tblFile';
 import ThemeToggle from './components/ThemeToggle';
 import LanguageSelector from './components/LanguageSelector';
 import { useLocalization } from './hooks/useLocalization';
+import { importFromTBL, importFromFile, ImportFormat } from './modules/import';
+import { exportToTBL, exportToFile, ExportFormat } from './modules/export';
 
 // ============================================
 // ТИПЫ И ИНТЕРФЕЙСЫ
@@ -222,99 +224,49 @@ function App() {
       if (!file) return;
 
       try {
-        const text = await file.text();
         let importedData: { id: number; text: string }[] = [];
         let importedLanguage = '';
 
-        // Парсинг в зависимости от формата
-        if (format === 'json') {
-          const json = JSON.parse(text);
-          if (json.language) importedLanguage = json.language;
-          if (json.entries && Array.isArray(json.entries)) importedData = json.entries;
-          else if (Array.isArray(json)) importedData = json;
-          else importedData = Object.entries(json).filter(([key]) => key !== 'language').map(([id, text]) => ({ id: parseInt(id), text: text as string }));
-        } else if (format === 'ini') {
-          for (const line of text.split('\n')) {
-            const langMatch = line.match(/^language\s*=\s*(.*)$/i);
-            if (langMatch) { importedLanguage = langMatch[1]; continue; }
-            const match = line.match(/^(\d+)\s*=\s*(.*)$/);
-            if (match) importedData.push({ id: parseInt(match[1]), text: match[2] });
-          }
-        } else if (format === 'yaml') {
-          let currentId: number | null = null;
-          let currentText = '';
-          for (const line of text.split('\n')) {
-            const langMatch = line.match(/^language:\s*(.*)$/);
-            if (langMatch) { importedLanguage = langMatch[1]; continue; }
-            const match = line.match(/^(\d+):\s*(.*)$/);
-            if (match) {
-              if (currentId !== null) importedData.push({ id: currentId, text: currentText.trim() });
-              currentId = parseInt(match[1]);
-              currentText = match[2];
-            } else if (currentId !== null && line.startsWith('  ')) {
-              currentText += '\n' + line.trim();
+        // Импорт из TBL или текстовых форматов
+        if (format === 'tbl') {
+          const buffer = await file.arrayBuffer();
+          const result = importFromTBL(buffer);
+          importedData = result.entries;
+          importedLanguage = result.language;
+          
+          // Используем загруженный файл напрямую
+          setTblFile(result.file);
+        } else {
+          const text = await file.text();
+          const result = importFromFile(format as ImportFormat, text);
+          importedData = result.entries;
+          importedLanguage = result.language;
+          
+          // Создаём или обновляем TBL файл
+          let currentTbl = tblFile || createEmptyTBLFile();
+          if (importedLanguage) currentTbl.setLanguage(importedLanguage);
+
+          for (const item of importedData) {
+            if (!currentTbl.entries.some(e => e.id === item.id)) {
+              currentTbl.entries.push({ id: item.id, decrypted: encodeCP1251(item.text + '\0') });
             }
           }
-          if (currentId !== null) importedData.push({ id: currentId, text: currentText.trim() });
-        } else if (format === 'toml') {
-          let currentId: number | null = null;
-          let currentText = '';
-          for (const line of text.split('\n')) {
-            const langMatch = line.match(/^language\s*=\s*"(.*)"$/);
-            if (langMatch) { importedLanguage = langMatch[1]; continue; }
-            const match = line.match(/^\[(\d+)\]$/);
-            if (match) {
-              if (currentId !== null) importedData.push({ id: currentId, text: currentText.trim() });
-              currentId = parseInt(match[1]);
-              currentText = '';
-            } else if (line.startsWith('text = "')) {
-              currentText = line.slice(7, -1);
-            }
-          }
-          if (currentId !== null) importedData.push({ id: currentId, text: currentText.trim() });
-        } else if (format === 'xml') {
-          const doc = new DOMParser().parseFromString(text, 'text/xml');
-          const langNode = doc.querySelector('language');
-          if (langNode) importedLanguage = langNode.textContent || '';
-          doc.querySelectorAll('entry').forEach(item => {
-            importedData.push({ id: parseInt(item.getAttribute('id') || '0'), text: item.textContent || '' });
-          });
-        } else if (format === 'csv') {
-          const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (i === 0 && line.toLowerCase().startsWith('language')) {
-              const match = line.match(/language[,\s]+(.+)/i);
-              if (match) importedLanguage = match[1];
-              continue;
-            }
-            if (line.toLowerCase().startsWith('id,text')) continue;
-            const match = line.match(/^(\d+),(.*)$/);
-            if (match) {
-              let text = match[2];
-              if (text.startsWith('"') && text.endsWith('"')) {
-                text = text.slice(1, -1).replace(/""/g, '"');
-              }
-              importedData.push({ id: parseInt(match[1]), text });
-            }
-          }
+
+          setTblFile(currentTbl);
         }
 
-        // Создание или обновление файла
-        let currentTbl = tblFile || createEmptyTBLFile();
-        if (importedLanguage) currentTbl.setLanguage(importedLanguage);
-
-        for (const item of importedData) {
-          if (!currentTbl.entries.some(e => e.id === item.id)) {
-            currentTbl.entries.push({ id: item.id, decrypted: encodeCP1251(item.text + '\0') });
-          }
-        }
-
-        currentTbl.path = file.name;
-        setTblFile(currentTbl);
         setFileName(file.name);
         setIsModified(true);
-        refreshEntries(currentTbl);
+        
+        // Обновляем список записей
+        if (format === 'tbl') {
+          const buffer = await file.arrayBuffer();
+          const result = importFromTBL(buffer);
+          refreshEntries(result.file);
+        } else {
+          refreshEntries(tblFile!);
+        }
+        
         setFavorites(new Set());
         setShowFavoritesOnly(false);
         showNotification('success', `${t('imported')}: ${importedData.length}`);
@@ -335,47 +287,43 @@ function App() {
   const handleExport = useCallback((format: string) => {
     if (!tblFile) return;
 
-    let content = '';
-    let mimeType = 'text/plain';
-    let ext = format;
+    try {
+      // Преобразуем записи в формат для экспорта
+      const exportEntries = tblFile.entries.map(entry => ({
+        id: entry.id,
+        text: tblFile.getDisplayText(entry)
+      }));
 
-    if (format === 'json') {
-      content = JSON.stringify({ language: tblFile.languageText, entries: tblFile.entries.map(e => ({ id: e.id, text: tblFile.getDisplayText(e) })) }, null, 2);
-      mimeType = 'application/json';
-    } else if (format === 'ini') {
-      content = `language=${tblFile.languageText}\n` + tblFile.entries.map(e => `${e.id}=${tblFile.getDisplayText(e)}`).join('\n');
-    } else if (format === 'yaml') {
-      content = `language: ${tblFile.languageText}\n` + tblFile.entries.map(e => `${e.id}: ${tblFile.getDisplayText(e)}`).join('\n');
-      ext = 'yml';
-    } else if (format === 'toml') {
-      content = `language = "${tblFile.languageText}"\n\n` + tblFile.entries.map(e => `[${e.id}]\ntext = "${tblFile.getDisplayText(e)}"\n`).join('\n');
-    } else if (format === 'xml') {
-      content = '<?xml version="1.0" encoding="UTF-8"?>\n<entries>\n';
-      content += `  <language>${escapeXml(tblFile.languageText)}</language>\n`;
-      content += tblFile.entries.map(e => `  <entry id="${e.id}">${escapeXml(tblFile.getDisplayText(e))}</entry>`).join('\n');
-      content += '\n</entries>';
-      mimeType = 'application/xml';
-    } else if (format === 'csv') {
-      content = `language,${tblFile.languageText}\n`;
-      content += `id,text\n`;
-      content += tblFile.entries.map(e => {
-        const text = tblFile.getDisplayText(e);
-        const escapedText = text.includes(',') || text.includes('"') || text.includes('\n')
-          ? `"${text.replace(/"/g, '""')}"`
-          : text;
-        return `${e.id},${escapedText}`;
-      }).join('\n');
-      mimeType = 'text/csv';
+      let content: string | ArrayBuffer;
+      let mimeType: string;
+      let ext: string;
+
+      // Экспорт в TBL или текстовые форматы
+      if (format === 'tbl') {
+        content = exportToTBL(exportEntries, tblFile.languageText, tblFile);
+        mimeType = 'application/octet-stream';
+        ext = 'tbl';
+      } else {
+        const result = exportToFile(format as ExportFormat, exportEntries, tblFile.languageText);
+        content = result.content;
+        mimeType = result.mimeType;
+        ext = result.extension;
+      }
+
+      // Создаём blob и скачиваем файл
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${fileName.replace('.tbl', '')}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      showNotification('success', `${t('exported')} ${format.toUpperCase()}`);
+    } catch (err: any) {
+      showNotification('error', `${t('error')}: ${err.message}`);
     }
 
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${fileName.replace('.tbl', '')}.${ext}`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showNotification('success', `${t('exported')} ${format.toUpperCase()}`);
     setShowFileMenu(false);
     setShowExportSubmenu(false);
   }, [tblFile, fileName, showNotification, t]);
@@ -1128,13 +1076,6 @@ function App() {
       )}
     </div>
   );
-}
-
-/**
- * Экранирование XML символов
- */
-function escapeXml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
 export default App;
