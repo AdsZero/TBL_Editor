@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { TBLFile, TBLEntry, encodeCP1251 } from './lib/tblFile';
 import ThemeToggle from './components/ThemeToggle';
 import LanguageSelector from './components/LanguageSelector';
-import TranslationTab from './components/TranslationTab';
 import { useLocalization } from './hooks/useLocalization';
 
 type SortField = 'id' | 'name';
@@ -37,9 +36,6 @@ function App() {
   const [showExportSubmenu, setShowExportSubmenu] = useState(false);
   const [importSubmenuPos, setImportSubmenuPos] = useState({ top: 0, left: 0 });
   const [exportSubmenuPos, setExportSubmenuPos] = useState({ top: 0, left: 0 });
-  const [activeTab, setActiveTab] = useState<'editor' | 'translation'>('editor');
-  const [targetLanguage, setTargetLanguage] = useState<string>('');
-  const [translations, setTranslations] = useState<Record<number, string>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importBtnRef = useRef<HTMLButtonElement>(null);
@@ -404,35 +400,6 @@ function App() {
     setIsModified(true);
   }, [tblFile]);
 
-  const handleSaveTranslation = useCallback(() => {
-    if (!tblFile) return;
-    
-    const newTbl = createEmptyTBLFile();
-    newTbl.languageText = targetLanguage;
-    
-    for (const [idStr, text] of Object.entries(translations)) {
-      const id = parseInt(idStr);
-      if (text.trim()) {
-        newTbl.entries.push({
-          id,
-          decrypted: encodeCP1251(text + '\0')
-        });
-      }
-    }
-    
-    const buffer = newTbl.save();
-    const blob = new Blob([buffer], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const baseName = fileName.replace(/\.[^/.]+$/, '') || 'output';
-    a.download = `${baseName}_${targetLanguage || 'translation'}.tbl`;
-    a.click();
-    URL.revokeObjectURL(url);
-    
-    showNotification('success', t('translations_saved'));
-  }, [tblFile, targetLanguage, translations, fileName, createEmptyTBLFile, showNotification, t]);
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -575,40 +542,7 @@ function App() {
         </div>
       </div>
 
-      {tblFile && (
-        <div className="border-b" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-secondary)' }}>
-          <div className="w-full px-6 flex gap-1">
-            <button
-              onClick={() => setActiveTab('editor')}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
-                activeTab === 'editor'
-                  ? 'text-[var(--text-primary)]'
-                  : 'border-transparent hover:text-[var(--text-secondary)]'
-              }`}
-              style={{ 
-                borderColor: activeTab === 'editor' ? 'var(--accent)' : 'transparent',
-                color: activeTab === 'editor' ? 'var(--text-primary)' : 'var(--text-muted)'
-              }}
-            >
-              {t('editor')}
-            </button>
-            <button
-              onClick={() => setActiveTab('translation')}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
-                activeTab === 'translation'
-                  ? 'text-[var(--text-primary)]'
-                  : 'border-transparent hover:text-[var(--text-secondary)]'
-              }`}
-              style={{ 
-                borderColor: activeTab === 'translation' ? 'var(--accent)' : 'transparent',
-                color: activeTab === 'translation' ? 'var(--text-primary)' : 'var(--text-muted)'
-              }}
-            >
-              {t('translations')}
-            </button>
-          </div>
-        </div>
-      )}
+
 
       <div className="w-full px-6 py-4">
         <div className="flex items-center gap-3">
@@ -736,7 +670,7 @@ function App() {
               </button>
             </div>
           </div>
-        ) : activeTab === 'editor' ? (
+        ) : (
           <div className="rounded-md overflow-hidden" style={{ border: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-secondary)' }}>
             <div className="grid grid-cols-[auto_140px_1fr_100px]" style={{ backgroundColor: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-subtle)' }}>
               <div className="px-3 py-2.5 flex items-center">
@@ -749,33 +683,33 @@ function App() {
               </div>
               <button
                 onClick={() => handleSort('id')}
-                className="px-3 py-2.5 text-left text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 font-medium"
+                className="px-3 py-3 text-left text-sm uppercase tracking-wider transition-colors flex items-center gap-1.5 font-medium"
                 style={{ color: 'var(--text-muted)' }}
                 onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
                 onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
               >
                 {t('id')}
                 {sortField === 'id' && (
-                  <svg className={`w-3 h-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className={`w-3.5 h-3.5 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                   </svg>
                 )}
               </button>
               <button
                 onClick={() => handleSort('name')}
-                className="px-3 py-2.5 text-left text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 font-medium"
+                className="px-3 py-3 text-left text-sm uppercase tracking-wider transition-colors flex items-center gap-1.5 font-medium"
                 style={{ color: 'var(--text-muted)' }}
                 onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
                 onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
               >
                 {t('text')}
                 {sortField === 'name' && (
-                  <svg className={`w-3 h-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className={`w-3.5 h-3.5 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                   </svg>
                 )}
               </button>
-              <div className="px-4 py-2.5 text-xs uppercase tracking-wider text-center font-medium" style={{ color: 'var(--text-muted)' }}>
+              <div className="px-4 py-3 text-sm uppercase tracking-wider text-center font-medium" style={{ color: 'var(--text-muted)' }}>
                 {t('actions')}
               </div>
             </div>
@@ -807,10 +741,10 @@ function App() {
                         className="w-3.5 h-3.5 cursor-pointer"
                       />
                     </div>
-                    <div className="px-3 py-2.5 flex items-center text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>
+                    <div className="px-3 py-3 text-base font-mono" style={{ color: 'var(--text-secondary)' }}>
                       <span className="truncate">{entry.id}</span>
                     </div>
-                    <div className="px-3 py-2.5 flex items-center text-sm" style={{ color: 'var(--text-primary)' }}>
+                    <div className="px-3 py-3 text-base" style={{ color: 'var(--text-primary)' }}>
                       <span className="truncate">{entry.text || <span style={{ color: 'var(--text-muted)' }} className="italic">{t('empty')}</span>}</span>
                     </div>
                     <div className="px-4 py-2.5 flex items-center justify-center gap-0.5">
@@ -852,19 +786,6 @@ function App() {
               <span style={{ color: 'var(--text-muted)' }}>{t('double_click_edit')}</span>
             </div>
           </div>
-        ) : (
-          <TranslationTab
-            entries={filteredAndSortedEntries.map(e => ({ id: e.id, text: e.text }))}
-            targetLanguage={targetLanguage}
-            onTargetLanguageChange={setTargetLanguage}
-            sortField={sortField}
-            sortDirection={sortDirection}
-            onSort={handleSort}
-            translations={translations}
-            onTranslationChange={(id, text) => setTranslations(prev => ({ ...prev, [id]: text }))}
-            onSave={handleSaveTranslation}
-            t={t}
-          />
         )}
       </div>
 
